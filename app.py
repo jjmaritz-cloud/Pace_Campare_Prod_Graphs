@@ -469,9 +469,15 @@ def aggregate_actual(df: pd.DataFrame, phase_label: str) -> pd.DataFrame:
 
     # Numeric helper columns used for calculations.
     for col in [
-        "HD%", "HH%", "% Lay", "Cumulative_Mortality", "Mortality",
-        "Feed_Usage", "Opening_Bird_Numbers", "Closing_Bird_Numbers",
-        "Birds Placed", "Cumulative_Eggs", "Total_Eggs", "Average_Egg_Weight",
+        "HD%", "HH%", "% Lay",
+        "Cumulative_Mortality",
+        "Closing_Bird_Numbers",
+        "Feed_Usage",
+        "Opening_Bird_Numbers",
+        "Birds Placed",
+        "Cumulative_Eggs",
+        "Total_Eggs",
+        "Average_Egg_Weight",
         "Average_Body_Weight",
     ]:
         if col in df.columns:
@@ -500,20 +506,18 @@ def aggregate_actual(df: pd.DataFrame, phase_label: str) -> pd.DataFrame:
         df["_production_actual"] = normalize_percent(df[prod_col])
 
     # Mortality cumulative actual.
-    # Use ONLY Eggsactly mortality percentage fields.
-    # Do NOT use Cumulative_Mortality, because that is a bird count.
-    mort_pct_col = first_numeric_col(df, [
-        "Mort %",
-        "Mort%",
-        "Mort % cum",
-        "Mortality %",
-        "Cumulative Mortality %",
-        "Cumulative_Mortality_Percent",
-    ])
+    # Calculate cumulative mortality % from cumulative mortality count and closing birds.
+    # Formula: Cumulative_Mortality / Closing_Bird_Numbers * 100
+    # Example: 201 morts / 11,863 birds * 100 = 1.69%
+    if "Cumulative_Mortality" in df.columns and "Closing_Bird_Numbers" in df.columns:
+        cumulative_morts = pd.to_numeric(df["Cumulative_Mortality"], errors="coerce")
+        closing_birds = pd.to_numeric(df["Closing_Bird_Numbers"], errors="coerce")
     
-    if mort_pct_col:
-        mort_pct = pd.to_numeric(df[mort_pct_col], errors="coerce")
-        df["_mortality_actual"] = normalize_percent(mort_pct)
+        df["_mortality_actual"] = np.where(
+            closing_birds.gt(0),
+            cumulative_morts / closing_birds * 100,
+            np.nan,
+        )
     else:
         df["_mortality_actual"] = np.nan
 
