@@ -499,16 +499,27 @@ def aggregate_actual(df: pd.DataFrame, phase_label: str) -> pd.DataFrame:
     if prod_col:
         df["_production_actual"] = normalize_percent(df[prod_col])
 
-    # Mortality cumulative actual. Cumulative_Mortality is often a bird count;
-    # convert to percentage when the values are clearly not already percent.
-    mort_col = first_numeric_col(df, ["Cumulative_Mortality", "Mortality"])
-    if mort_col:
-        mort = pd.to_numeric(df[mort_col], errors="coerce")
-        max_mort = mort.dropna().max() if mort.notna().any() else np.nan
-        if pd.notna(max_mort) and max_mort > 100 and pd.notna(flock_base) and flock_base > 0:
-            df["_mortality_actual"] = mort / flock_base * 100
-        else:
-            df["_mortality_actual"] = normalize_percent(mort)
+    # Mortality cumulative actual.
+    # Prefer the Eggsactly calculated cumulative mortality percentage column.
+    # Do NOT plot raw Cumulative_Mortality counts directly.
+    mort_pct_col = first_numeric_col(df, ["Mort %", "Mort%", "Mortality %", "Cumulative Mortality %"])
+    
+    if mort_pct_col:
+        df["_mortality_actual"] = normalize_percent(df[mort_pct_col])
+    elif "Cumulative_Mortality" in df.columns:
+        # Fallback only: convert cumulative mortality bird count to %
+        mort_count = pd.to_numeric(df["Cumulative_Mortality"], errors="coerce")
+    
+        bird_base = np.nan
+        for base_col in ["Birds Placed", "Opening_Bird_Numbers", "Closing_Bird_Numbers"]:
+            if base_col in df.columns:
+                base_vals = pd.to_numeric(df[base_col], errors="coerce").dropna()
+                if not base_vals.empty and base_vals.max() > 0:
+                    bird_base = float(base_vals.max())
+                    break
+    
+        if pd.notna(bird_base) and bird_base > 0:
+            df["_mortality_actual"] = mort_count / bird_base * 100
 
     # Feed intake actual in grams/bird/day from weekly feed usage.
     # If Feed_Usage appears to be tonnes instead of kg, this still gives the
